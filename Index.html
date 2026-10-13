@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passeio do Cavalo - Heurística de Warnsdorff</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --panel: #16213e;
+            --panel-light: #1f2d4d;
+            --text: #e0e0e0;
+            --text-muted: #aaa;
+            --accent: #e94560;
+            --accent2: #4ecdc4;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --light-square: #f0d9b5;
+            --dark-square: #b58863;
+            --current-border: #3498db;
+            --possible-border: #2ecc71;
+            --priority-color: #ff6b6b;
+            --visited-start: #4ecdc4;
+            --visited-end: #e94560;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(233, 69, 96, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 50%, rgba(78, 205, 196, 0.08) 0%, transparent 60%);
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+            background: var(--panel);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #4ecdc4, #e94560);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .subtitle strong {
+            color: var(--accent2);
+        }
+
+        .board-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .board-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 520px;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 3px rgba(255, 255, 255, 0.08);
+            background: #333;
+        }
+
+        .board {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            gap: 0;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            position: relative;
+            transition: background-color 0.15s, box-shadow 0.15s, transform 0.1s;
+            cursor: pointer;
+            aspect-ratio: 1;
+            color: #222;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .cell.light {
+            background-color: var(--light-square);
+        }
+        .cell.dark {
+            background-color: var(--dark-square);
+        }
+
+        .cell.visited {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .cell.current {
+            box-shadow: inset 0 0 0 4px var(--current-border), 0 0 25px rgba(52, 152, 219, 0.7);
+            z-index: 2;
+            animation: pulse-current 1.5s ease-in-out infinite;
+        }
+
+        .cell.possible {
+            box-shadow: inset 0 0 0 3px var(--possible-border);
+            cursor: pointer;
+            z-index: 1;
+            animation: pulse-possible 1.8s ease-in-out infinite;
+        }
+
+        .cell.possible:hover {
+            box-shadow: inset 0 0 0 4px var(--possible-border), 0 0 20px rgba(46, 204, 113, 0.6);
+            transform: scale(0.96);
+        }
+
+        .cell .move-number {
+            font-size: 1.1rem;
+            font-weight: 700;
+            pointer-events: none;
+        }
+
+        .cell .priority-number {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--priority-color);
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .cell .knight-icon {
+            font-size: 2rem;
+            pointer-events: none;
+            line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+        }
+
+        .cell.visited.start-cell {
+            background-color: var(--visited-start) !important;
+        }
+
+        @keyframes pulse-current {
+            0%,
+            100% {
+                box-shadow: inset 0 0 0 4px var(--current-border), 0 0 25px rgba(52, 152, 219, 0.7);
+            }
+            50% {
+                box-shadow: inset 0 0 0 4px var(--current-border), 0 0 40px rgba(52, 152, 219, 1);
+            }
+        }
+
+        @keyframes pulse-possible {
+            0%,
+            100% {
+                box-shadow: inset 0 0 0 3px var(--possible-border);
+            }
+            50% {
+                box-shadow: inset 0 0 0 3px var(--possible-border), 0 0 20px rgba(46, 204, 113, 0.5);
+            }
+        }
+
+        .controls-section {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .control-group {
+            background: var(--panel-light);
+            border-radius: 14px;
+            padding: 18px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .control-group h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.3px;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #c0392b;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: #27ae60;
+        }
+
+        .btn-info {
+            background: #3498db;
+            color: #fff;
+        }
+        .btn-info:hover {
+            background: #2980b9;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: #fff;
+        }
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        .btn-outline:hover {
+            border-color: var(--accent2);
+            color: var(--accent2);
+        }
+        .btn-outline.active {
+            border-color: var(--accent2);
+            color: var(--accent2);
+            background: rgba(78, 205, 196, 0.15);
+        }
+
+        .btn-sm {
+            padding: 7px 14px;
+            font-size: 0.8rem;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        select,
+        input[type="range"] {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text);
+            font-size: 0.9rem;
+            font-family: inherit;
+            outline: none;
+        }
+
+        select:focus,
+        input[type="range"]:focus {
+            border-color: var(--accent2);
+        }
+
+        select option {
+            background: var(--panel);
+            color: var(--text);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 12px 14px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent2);
+            line-height: 1.2;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent2), var(--accent));
+            border-radius: 5px;
+            transition: width 0.4s ease;
+        }
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-align: center;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s;
+        }
+
+        .status-message.success {
+            background: rgba(46, 204, 113, 0.2);
+            border-color: var(--success);
+            color: #2ecc71;
+        }
+        .status-message.warning {
+            background: rgba(243, 156, 18, 0.2);
+            border-color: var(--warning);
+            color: #f39c12;
+        }
+        .status-message.info {
+            background: rgba(52, 152, 219, 0.2);
+            border-color: #3498db;
+            color: #5dade2;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .speed-control input[type="range"] {
+            flex: 1;
+            min-width: 120px;
+            accent-color: var(--accent2);
+        }
+        .speed-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .history-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 80px;
+            overflow-y: auto;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        .history-chip {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            font-family: 'Courier New', monospace;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.6rem;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .board-wrapper {
+                max-width: 100%;
+            }
+            .cell .move-number {
+                font-size: 0.85rem;
+            }
+            .cell .knight-icon {
+                font-size: 1.5rem;
+            }
+            .cell .priority-number {
+                width: 14px;
+                height: 14px;
+                font-size: 0.55rem;
+                top: 1px;
+                right: 1px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Seção do Tabuleiro -->
+        <div class="board-section">
+            <h1>♞ Passeio do Cavalo</h1>
+            <p class="subtitle">
+                <strong>Heurística de Warnsdorff</strong> — O cavalo deve visitar todas as casas
+                exatamente uma vez. A cada passo, escolhe-se a casa com <strong>menos</strong>
+                movimentos futuros possíveis.
+            </p>
+            <div class="board-wrapper">
+                <div class="board" id="board"></div>
+            </div>
+            <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-dot" style="background:#3498db;"></span> Posição atual</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#2ecc71;"></span> Movimentos possíveis</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#ff6b6b;"></span> Prioridade (Warnsdorff)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#4ecdc4;"></span> Início</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#e94560;"></span> Fim</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção de Controles -->
+        <div class="controls-section">
+            <div class="control-group">
+                <h3>⚙️ Configuração</h3>
+                <div class="control-row">
+                    <label style="font-size:0.85rem; color:var(--text-muted);">Tamanho:</label>
+                    <select id="boardSize" style="min-width:70px;">
+                        <option value="5">5×5</option>
+                        <option value="6">6×6</option>
+                        <option value="7">7×7</option>
+                        <option value="8" selected>8×8</option>
+                        <option value="9">9×9</option>
+                        <option value="10">10×10</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" id="btnReset" title="Reiniciar o jogo">🔄 Novo Jogo</button>
+                </div>
+                <div style="margin-top:10px;">
+                    <label style="font-size:0.85rem; color:var(--text-muted);">Posição inicial:</label>
+                    <div class="control-row" style="margin-top:6px;">
+                        <select id="startX" style="min-width:60px;"></select>
+                        <span style="color:var(--text-muted);">×</span>
+                        <select id="startY" style="min-width:60px;"></select>
+                        <button class="btn btn-outline btn-sm" id="btnSetStart">Definir Início</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>🎮 Controles</h3>
+                <div class="control-row">
+                    <button class="btn btn-success" id="btnAuto" title="Executar a Heurística de Warnsdorff automaticamente">
+                        ▶ Auto (Warnsdorff)
+                    </button>
+                    <button class="btn btn-info" id="btnStep" title="Executar um passo da heurística">
+                        ⏭ Passo
+                    </button>
+                    <button class="btn btn-warning btn-sm" id="btnUndo" title="Desfazer último movimento">
+                        ↩ Desfazer
+                    </button>
+                </div>
+                <div class="speed-control" style="margin-top:12px;">
+                    <span style="font-size:0.8rem; color:var(--text-muted);">🐢</span>
+                    <input type="range" id="speedSlider" min="1" max="10" value="5" step="1">
+                    <span style="font-size:0.8rem; color:var(--text-muted);">🐇</span>
+                    <span class="speed-label" id="speedLabel">Médio</span>
+                </div>
+                <div class="control-row" style="margin-top:10px;">
+                    <button class="btn btn-outline btn-sm" id="btnShowPriorities" title="Mostrar os valores de prioridade nas casas alcançáveis">
+                        🔢 Mostrar Prioridades
+                    </button>
+                    <button class="btn btn-outline btn-sm" id="btnShowPath" title="Mostrar a sequência do caminho com números">
+                        🛤 Mostrar Caminho
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>📊 Estatísticas</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statMoves">0</div>
+                        <div class="stat-label">Movimentos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statVisited">0</div>
+                        <div class="stat-label">Casas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="fill" id="progressFill" style="width:0%;"></div>
+                </div>
+                <div id="statusMessage" class="status-message" style="margin-top:10px;">
+                    🔔 Clique em uma casa para começar, ou use "Auto" para ver a heurística em ação.
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>📜 Histórico do Caminho</h3>
+                <div class="history-bar" id="historyBar">
+                    <span style="color:var(--text-muted); font-size:0.8rem;">Nenhum movimento ainda...</span>
+                </div>
+            </div>
+
+            <div class="control-group" style="font-size:0.8rem; color:var(--text-muted); line-height:1.6;">
+                <h3>📖 Sobre a Heurística</h3>
+                <p>
+                    Proposta por <strong>H. C. von Warnsdorff em 1823</strong>, a regra diz:
+                    a cada passo, o cavalo deve ir para a casa que possui o
+                    <strong style="color:var(--accent2);">menor número de movimentos futuros possíveis</strong>.
+                    Isso prioriza as casas "vulneráveis" (com poucas saídas),
+                    evitando becos sem saída no final do percurso.
+                </p>
+                <p style="margin-top:6px;">
+                    <em>Nota:</em> A heurística não garante solução em 100% dos casos,
+                    mas é altamente eficiente para o tabuleiro 8×8.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ============ ESTADO DO JOGO ============
+            let boardSize = 8;
+            let board = []; // matriz boardSize x boardSize, 0 = não visitado, >0 = número do movimento
+            let position = null; // {x, y}
+            let moveCount = 0;
+            let history = []; // array de {x, y} em ordem
+            let isAutoPlaying = false;
+            let autoPlayTimer = null;
+            let showPriorities = false;
+            let showPath = true;
+
+            // Elementos DOM
+            const boardEl = document.getElementById('board');
+            const boardSizeSelect = document.getElementById('boardSize');
+            const startXSelect = document.getElementById('startX');
+            const startYSelect = document.getElementById('startY');
+            const btnReset = document.getElementById('btnReset');
+            const btnAuto = document.getElementById('btnAuto');
+            const btnStep = document.getElementById('btnStep');
+            const btnUndo = document.getElementById('btnUndo');
+            const btnSetStart = document.getElementById('btnSetStart');
+            const btnShowPriorities = document.getElementById('btnShowPriorities');
+            const btnShowPath = document.getElementById('btnShowPath');
+            const speedSlider = document.getElementById('speedSlider');
+            const speedLabel = document.getElementById('speedLabel');
+            const statMoves = document.getElementById('statMoves');
+            const statVisited = document.getElementById('statVisited');
+            const statTotal = document.getElementById('statTotal');
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            const historyBar = document.getElementById('historyBar');
+
+            // ============ FUNÇÕES AUXILIARES ============
+            function getTotalCells() {
+                return boardSize * boardSize;
+            }
+
+            function isValidPos(x, y) {
+                return x >= 0 && x < boardSize && y >= 0 && y < boardSize;
+            }
+
+            function getPossibleMoves(pos) {
+                const moves = [];
+                const knightMoves = [
+                    [2, -1],
+                    [2, 1],
+                    [-2, -1],
+                    [-2, 1],
+                    [1, -2],
+                    [1, 2],
+                    [-1, -2],
+                    [-1, 2]
+                ];
+                for (const [dx, dy] of knightMoves) {
+                    const nx = pos.x + dx;
+                    const ny = pos.y + dy;
+                    if (isValidPos(nx, ny) && board[nx][ny] === 0) {
+                        moves.push({ x: nx, y: ny });
+                    }
+                }
+                return moves;
+            }
+
+            function getWarnsdorffPriority(pos) {
+                // Número de movimentos futuros possíveis a partir de pos
+                return getPossibleMoves(pos).length;
+            }
+
+            function getBestMove() {
+                if (!position) return null;
+                const moves = getPossibleMoves(position);
+                if (moves.length === 0) return null;
+                if (moves.length === 1) return moves[0];
+
+                // Calcular prioridade para cada movimento
+                const movesWithPriority = moves.map(m => ({
+                    pos: m,
+                    priority: getWarnsdorffPriority(m)
+                }));
+
+                // Encontrar o menor valor de prioridade
+                const minPriority = Math.min(...movesWithPriority.map(m => m.priority));
+
+                // Filtrar os movimentos com menor prioridade
+                const bestMoves = movesWithPriority.filter(m => m.priority === minPriority);
+
+                // Em caso de empate, escolher aleatoriamente
+                const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                return chosen.pos;
+            }
+
+            function getSpeedMs() {
+                const val = parseInt(speedSlider.value);
+                // val 1 = 800ms, val 10 = 50ms (escala logarítmica aproximada)
+                const ms = Math.round(800 / Math.pow(val, 1.6));
+                return Math.max(50, Math.min(800, ms));
+            }
+
+            function updateSpeedLabel() {
+                const val = parseInt(speedSlider.value);
+                if (val <= 3) speedLabel.textContent = 'Lento';
+                else if (val <= 6) speedLabel.textContent = 'Médio';
+                else speedLabel.textContent = 'Rápido';
+            }
+
+            // ============ INICIALIZAÇÃO ============
+            function initBoard() {
+                board = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+                moveCount = 0;
+                history = [];
+                position = null;
+                stopAutoPlay();
+                updateSelects();
+                render();
+                updateStats();
+                updateHistoryBar();
+                setStatus('🔔 Clique em uma casa para começar, ou use "Auto" para ver a heurística em ação.', 'info');
+            }
+
+            function updateSelects() {
+                // Preencher selects de posição inicial
+                startXSelect.innerHTML = '';
+                startYSelect.innerHTML = '';
+                for (let i = 0; i < boardSize; i++) {
+                    const optX = document.createElement('option');
+                    optX.value = i;
+                    optX.textContent = i + 1;
+                    startXSelect.appendChild(optX);
+                    const optY = document.createElement('option');
+                    optY.value = i;
+                    optY.textContent = i + 1;
+                    startYSelect.appendChild(optY);
+                }
+                startXSelect.value = 0;
+                startYSelect.value = 0;
+            }
+
+            function setStartPosition(x, y) {
+                if (board[x][y] !== 0 && moveCount > 0) {
+                    setStatus('⚠️ Posição já visitada! Escolha outra.', 'warning');
+                    return;
+                }
+                // Resetar tudo
+                board = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+                moveCount = 0;
+                history = [];
+                position = { x, y };
+                board[x][y] = 1;
+                moveCount = 1;
+                history.push({ x, y });
+                stopAutoPlay();
+                render();
+                updateStats();
+                updateHistoryBar();
+                setStatus(`🐴 Posição inicial definida em (${x + 1}, ${y + 1})`, 'info');
+            }
+
+            function moveTo(pos) {
+                if (!position) return;
+                if (board[pos.x][pos.y] !== 0) return;
+                moveCount++;
+                board[pos.x][pos.y] = moveCount;
+                history.push({ x: pos.x, y: pos.y });
+                position = { x: pos.x, y: pos.y };
+                render();
+                updateStats();
+                updateHistoryBar();
+
+                const totalCells = getTotalCells();
+                if (moveCount === totalCells) {
+                    stopAutoPlay();
+                    setStatus(`🎉 PASSEIO COMPLETO! Todas as ${totalCells} casas foram visitadas! 🎉`, 'success');
+                } else {
+                    const possible = getPossibleMoves(position);
+                    if (possible.length === 0) {
+                        stopAutoPlay();
+                        setStatus(`⚠️ Beco sem saída! Visitou ${moveCount} de ${totalCells} casas.`, 'warning');
+                    }
+                }
+            }
+
+            function undoMove() {
+                if (history.length <= 1) {
+                    setStatus('⚠️ Nada para desfazer.', 'warning');
+                    return;
+                }
+                stopAutoPlay();
+                const lastPos = history.pop();
+                board[lastPos.x][lastPos.y] = 0;
+                moveCount--;
+                position = history[history.length - 1];
+                render();
+                updateStats();
+                updateHistoryBar();
+                setStatus(`↩ Movimento desfeito. Posição atual: (${position.x + 1}, ${position.y + 1})`, 'info');
+            }
+
+            function autoStep() {
+                const bestMove = getBestMove();
+                if (bestMove) {
+                    moveTo(bestMove);
+                    return true;
+                } else {
+                    stopAutoPlay();
+                    const totalCells = getTotalCells();
+                    if (moveCount < totalCells) {
+                        setStatus(`⚠️ A heurística parou em ${moveCount} de ${totalCells} casas.`, 'warning');
+                    }
+                    return false;
+                }
+            }
+
+            function startAutoPlay() {
+                if (isAutoPlaying) {
+                    stopAutoPlay();
+                    return;
+                }
+                if (!position) {
+                    setStatus('⚠️ Defina uma posição inicial primeiro!', 'warning');
+                    return;
+                }
+                const totalCells = getTotalCells();
+                if (moveCount === totalCells) {
+                    setStatus('🎉 Passeio já completo!', 'success');
+                    return;
+                }
+                isAutoPlaying = true;
+                btnAuto.textContent = '⏸ Parar';
+                btnAuto.classList.remove('btn-success');
+                btnAuto.classList.add('btn-warning');
+                setStatus('▶ Executando Heurística de Warnsdorff...', 'info');
+
+                function tick() {
+                    if (!isAutoPlaying) return;
+                    const success = autoStep();
+                    if (success && isAutoPlaying) {
+                        const ms = getSpeedMs();
+                        autoPlayTimer = setTimeout(tick, ms);
+                    }
+                }
+                // Pequeno atraso antes do primeiro movimento
+                autoPlayTimer = setTimeout(tick, 300);
+            }
+
+            function stopAutoPlay() {
+                isAutoPlaying = false;
+                if (autoPlayTimer) {
+                    clearTimeout(autoPlayTimer);
+                    autoPlayTimer = null;
+                }
+                btnAuto.textContent = '▶ Auto (Warnsdorff)';
+                btnAuto.classList.remove('btn-warning');
+                btnAuto.classList.add('btn-success');
+            }
+
+            function setStatus(msg, type) {
+                statusMessage.textContent = msg;
+                statusMessage.className = 'status-message';
+                if (type === 'success') statusMessage.classList.add('success');
+                else if (type === 'warning') statusMessage.classList.add('warning');
+                else if (type === 'info') statusMessage.classList.add('info');
+            }
+
+            function updateStats() {
+                statMoves.textContent = moveCount;
+                const visited = moveCount;
+                const total = getTotalCells();
+                statVisited.textContent = visited;
+                statTotal.textContent = total;
+                const pct = total > 0 ? Math.round((visited / total) * 100) : 0;
+                progressFill.style.width = pct + '%';
+            }
+
+            function updateHistoryBar() {
+                if (history.length === 0) {
+                    historyBar.innerHTML = '<span style="color:var(--text-muted); font-size:0.8rem;">Nenhum movimento ainda...</span>';
+                    return;
+                }
+                const chips = history.map((pos, idx) => {
+                    const label = `${idx + 1}:(${pos.x + 1},${pos.y + 1})`;
+                    return `<span class="history-chip">${label}</span>`;
+                }).join('');
+                historyBar.innerHTML = chips;
+                historyBar.scrollTop = historyBar.scrollHeight;
+            }
+
+            // ============ RENDERIZAÇÃO ============
+            function getVisitedColor(step, totalSteps) {
+                // Interpolar de verde (início) para vermelho (fim)
+                if (totalSteps <= 1) return '#4ecdc4';
+                const t = (step - 1) / (totalSteps - 1);
+                // Gradiente: #4ecdc4 -> #e94560
+                const r = Math.round(78 + (233 - 78) * t);
+                const g = Math.round(205 + (69 - 205) * t);
+                const b = Math.round(196 + (96 - 196) * t);
+                return `rgb(${r},${g},${b})`;
+            }
+
+            function render() {
+                boardEl.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+                boardEl.innerHTML = '';
+
+                const totalCells = getTotalCells();
+                const possibleMoves = position ? getPossibleMoves(position) : [];
+                const possibleSet = new Set(possibleMoves.map(p => `${p.x},${p.y}`));
+                const prioritiesMap = {};
+                if (showPriorities && position) {
+                    for (const m of possibleMoves) {
+                        const key = `${m.x},${m.y}`;
+                        prioritiesMap[key] = getWarnsdorffPriority(m);
+                    }
+                }
+
+                for (let r = 0; r < boardSize; r++) {
+                    for (let c = 0; c < boardSize; c++) {
+                        const cell = document.createElement('div');
+                        const isLight = (r + c) % 2 === 0;
+                        cell.className = `cell ${isLight ? 'light' : 'dark'}`;
+
+                        const cellValue = board[r][c];
+                        const key = `${r},${c}`;
+                        const isCurrent = position && position.x === r && position.y === c;
+                        const isPossible = possibleSet.has(key);
+                        const isVisited = cellValue > 0;
+
+                        if (isVisited) {
+                            cell.classList.add('visited');
+                            const color = getVisitedColor(cellValue, totalCells);
+                            cell.style.backgroundColor = color;
+                            cell.style.color = '#fff';
+                            if (showPath || isCurrent) {
+                                cell.innerHTML = `<span class="move-number">${cellValue}</span>`;
+                            }
+                            if (cellValue === 1) {
+                                cell.classList.add('start-cell');
+                            }
+                            if (cellValue === totalCells) {
+                                cell.style.boxShadow = 'inset 0 0 0 4px #e94560';
+                            }
+                        }
+
+                        if (isCurrent) {
+                            cell.classList.add('current');
+                            // Mostrar cavalo
+                            if (!showPath && cellValue === 0) {
+                                cell.innerHTML = '<span class="knight-icon">♞</span>';
+                            } else if (cellValue > 0) {
+                                cell.innerHTML = `<span class="move-number">${cellValue}</span>`;
+                            }
+                            cell.style.color = '#fff';
+                        }
+
+                        if (isPossible && !isVisited) {
+                            cell.classList.add('possible');
+                            if (showPriorities && prioritiesMap[key] !== undefined) {
+                                const prio = prioritiesMap[key];
+                                cell.innerHTML = `<span class="priority-number">${prio}</span>`;
+                            }
+                        }
+
+                        // Evento de clique
+                        cell.addEventListener('click', () => {
+                            handleCellClick(r, c);
+                        });
+
+                        boardEl.appendChild(cell);
+                    }
+                }
+            }
+
+            function handleCellClick(r, c) {
+                if (isAutoPlaying) {
+                    stopAutoPlay();
+                    setStatus('⏸ Pausado.', 'info');
+                    return;
+                }
+
+                if (!position) {
+                    // Definir posição inicial
+                    setStartPosition(r, c);
+                    return;
+                }
+
+                // Verificar se é um movimento possível
+                const possibleMoves = getPossibleMoves(position);
+                const isPossible = possibleMoves.some(m => m.x === r && m.y === c);
+
+                if (isPossible) {
+                    moveTo({ x: r, y: c });
+                } else if (position.x === r && position.y === c) {
+                    setStatus('🐴 Você já está nesta posição.', 'info');
+                } else {
+                    setStatus('❌ Movimento inválido! O cavalo move em "L" (2+1 casas).', 'warning');
+                }
+            }
+
+            // ============ EVENT LISTENERS ============
+            boardSizeSelect.addEventListener('change', () => {
+                boardSize = parseInt(boardSizeSelect.value);
+                stopAutoPlay();
+                initBoard();
+                setStatus(`📐 Tabuleiro ${boardSize}×${boardSize} criado.`, 'info');
+            });
+
+            btnReset.addEventListener('click', () => {
+                stopAutoPlay();
+                initBoard();
+                setStatus('🔄 Novo jogo iniciado.', 'info');
+            });
+
+            btnSetStart.addEventListener('click', () => {
+                stopAutoPlay();
+                const x = parseInt(startXSelect.value);
+                const y = parseInt(startYSelect.value);
+                setStartPosition(x, y);
+            });
+
+            btnAuto.addEventListener('click', () => {
+                if (isAutoPlaying) {
+                    stopAutoPlay();
+                    setStatus('⏸ Pausado.', 'info');
+                } else {
+                    startAutoPlay();
+                }
+            });
+
+            btnStep.addEventListener('click', () => {
+                if (isAutoPlaying) {
+                    stopAutoPlay();
+                }
+                if (!position) {
+                    setStatus('⚠️ Defina uma posição inicial primeiro!', 'warning');
+                    return;
+                }
+                const success = autoStep();
+                if (!success) {
+                    // autoStep já define status
+                }
+            });
+
+            btnUndo.addEventListener('click', () => {
+                undoMove();
+            });
+
+            btnShowPriorities.addEventListener('click', () => {
+                showPriorities = !showPriorities;
+                btnShowPriorities.classList.toggle('active', showPriorities);
+                render();
+                if (showPriorities) {
+                    setStatus('🔢 Prioridades de Warnsdorff exibidas nas casas alcançáveis.', 'info');
+                } else {
+                    setStatus('🔢 Prioridades ocultas.', 'info');
+                }
+            });
+
+            btnShowPath.addEventListener('click', () => {
+                showPath = !showPath;
+                btnShowPath.classList.toggle('active', showPath);
+                render();
+                if (showPath) {
+                    setStatus('🛤 Caminho com números exibido.', 'info');
+                } else {
+                    setStatus('🛤 Números do caminho ocultos.', 'info');
+                }
+            });
+
+            speedSlider.addEventListener('input', () => {
+                updateSpeedLabel();
+                if (isAutoPlaying) {
+                    // Reiniciar timer com nova velocidade
+                    stopAutoPlay();
+                    startAutoPlay();
+                }
+            });
+
+            // Teclado
+            document.addEventListener('keydown', (e) => {
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    if (isAutoPlaying) {
+                        stopAutoPlay();
+                        setStatus('⏸ Pausado.', 'info');
+                    } else {
+                        startAutoPlay();
+                    }
+                } else if (e.key === 's' || e.key === 'S') {
+                    if (isAutoPlaying) stopAutoPlay();
+                    if (position) autoStep();
+                } else if (e.key === 'r' || e.key === 'R') {
+                    stopAutoPlay();
+                    initBoard();
+                    setStatus('🔄 Novo jogo iniciado.', 'info');
+                } else if (e.key === 'u' || e.key === 'U') {
+                    undoMove();
+                } else if (e.key === 'p' || e.key === 'P') {
+                    showPriorities = !showPriorities;
+                    btnShowPriorities.classList.toggle('active', showPriorities);
+                    render();
+                }
+            });
+
+            // ============ INICIALIZAÇÃO ============
+            updateSpeedLabel();
+            btnShowPriorities.classList.add('active');
+            showPriorities = true;
+            btnShowPath.classList.add('active');
+            showPath = true;
+            initBoard();
+
+            // Mensagem de boas-vindas
+            setStatus('🔔 Bem-vindo! Clique em uma casa para definir o início, ou use "Auto" para ver a Heurística de Warnsdorff em ação.', 'info');
+
+            console.log('♞ Passeio do Cavalo — Heurística de Warnsdorff');
+            console.log('Atalhos: [Espaço] Auto/Parar | [S] Passo | [R] Reiniciar | [U] Desfazer | [P] Prioridades');
+        })();
+    </script>
+</body>
+</html>
